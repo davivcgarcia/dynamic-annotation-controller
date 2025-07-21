@@ -1,5 +1,5 @@
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= docker.io/davivcgarcia/dynamic-annotation-controller:latest
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -168,6 +168,24 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+
+.PHONY: deploy-dev
+deploy-dev: manifests kustomize ## Deploy controller to development environment.
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	$(KUSTOMIZE) build config/development | $(KUBECTL) apply -f -
+
+.PHONY: deploy-prod
+deploy-prod: manifests kustomize ## Deploy controller to production environment.
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	$(KUSTOMIZE) build config/production | $(KUBECTL) apply -f -
+
+.PHONY: deploy-samples
+deploy-samples: kustomize ## Deploy sample AnnotationScheduleRule manifests.
+	$(KUSTOMIZE) build config/samples | $(KUBECTL) apply -f -
+
+.PHONY: undeploy-samples
+undeploy-samples: kustomize ## Remove sample AnnotationScheduleRule manifests.
+	$(KUSTOMIZE) build config/samples | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
 ##@ Dependencies
 

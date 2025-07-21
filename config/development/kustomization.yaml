@@ -1,0 +1,74 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Development overlay for Dynamic Annotation Controller
+namespace: dynamic-annotation-controller-dev
+
+# Base configuration
+resources:
+- ../default
+
+# Development-specific patches
+patches:
+# Reduce resource requirements for development
+- patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/limits/cpu
+      value: "500m"
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/limits/memory
+      value: "128Mi"
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/requests/cpu
+      value: "50m"
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/requests/memory
+      value: "64Mi"
+  target:
+    kind: Deployment
+    name: controller-manager
+
+# Enable debug logging
+- patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: "--zap-log-level=debug"
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: "--zap-development=true"
+  target:
+    kind: Deployment
+    name: controller-manager
+
+# Single replica for development
+- patch: |-
+    - op: replace
+      path: /spec/replicas
+      value: 1
+  target:
+    kind: Deployment
+    name: controller-manager
+
+# Add development labels
+commonLabels:
+  environment: development
+  tier: control-plane
+
+# Add development annotations
+commonAnnotations:
+  deployment.kubernetes.io/revision: "1"
+  config.kubernetes.io/origin: "kustomize"
+  development.kubernetes.io/debug: "enabled"
+
+# Create development namespace
+patchesStrategicMerge:
+- |-
+  apiVersion: v1
+  kind: Namespace
+  metadata:
+    name: dynamic-annotation-controller-dev
+    labels:
+      environment: development
+      pod-security.kubernetes.io/enforce: restricted
+      pod-security.kubernetes.io/audit: restricted
+      pod-security.kubernetes.io/warn: restricted

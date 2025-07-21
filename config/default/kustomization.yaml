@@ -1,12 +1,12 @@
 # Adds namespace to all resources.
-namespace: dynamic-annotation-controller-system
+namespace: dyn-annotation-system
 
 # Value of this field is prepended to the
 # names of all resources, e.g. a deployment named
 # "wordpress" becomes "alices-wordpress".
 # Note that it should also match with the prefix (text before '-') of the namespace
 # field above.
-namePrefix: dynamic-annotation-controller-
+namePrefix: dyn-annotation-
 
 # Labels to add to all resources and selectors.
 #labels:
@@ -15,9 +15,10 @@ namePrefix: dynamic-annotation-controller-
 #    someName: someValue
 
 resources:
-#- ../crd
+- ../crd
 - ../rbac
 - ../manager
+- ../namespace
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
 # crd/kustomization.yaml
 #- ../webhook

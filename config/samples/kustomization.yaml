@@ -1,0 +1,17 @@
+## Append samples of your project ##
+resources:
+# Basic examples for getting started
+- basic-datetime-example.yaml
+- basic-cron-apply-example.yaml
+- basic-cron-remove-example.yaml
+# Comprehensive examples with real-world use cases
+- datetime-maintenance-window.yaml
+- cron-daily-backup.yaml
+- cron-business-hours.yaml
+- advanced-annotation-groups.yaml
+# Original scaffolded examples
+- scheduler_v1_annotationschedulerule.yaml
+- scheduler_v1_annotationschedulerule_cron.yaml
+- scheduler_v1_annotationschedulerule_multi_annotation.yaml
+- scheduler_v1_annotationschedulerule_cron_multi.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

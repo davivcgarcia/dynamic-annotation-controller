@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: annotation-scheduler-security-config
+  namespace: system
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/component: security
+data:
+  # Annotation validation configuration
+  allowed-prefixes: |
+    app.kubernetes.io/
+    scheduler.k8s.io/
+    example.com/
+    mycompany.com/
+  
+  denied-prefixes: |
+    kubernetes.io/
+    k8s.io/
+    kubectl.kubernetes.io/
+    node.kubernetes.io/
+    volume.kubernetes.io/
+    service.kubernetes.io/
+    endpoints.kubernetes.io/
+    endpointslice.kubernetes.io/
+    networking.kubernetes.io/
+    policy/
+    security.kubernetes.io/
+    admission.kubernetes.io/
+    authorization.kubernetes.io/
+    authentication.kubernetes.io/
+    rbac.authorization.kubernetes.io/
+    apiserver.kubernetes.io/
+    controller.kubernetes.io/
+    scheduler.kubernetes.io/
+    kubelet.kubernetes.io/
+    kube-proxy.kubernetes.io/
+    cloud.kubernetes.io/
+    cluster-autoscaler.kubernetes.io/
+    node-restriction.kubernetes.io/
+  
+  # Required prefix for all managed annotations
+  required-prefix: "scheduler.k8s.io/managed-"
+  
+  # Maximum lengths
+  max-key-length: "253"
+  max-value-length: "65536"
+  
+  # Audit logging configuration
+  audit-enabled: "true"
+  audit-level: "info"
+  
+  # Security event creation
+  create-security-events: "true"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: annotation-scheduler-audit-config
+  namespace: system
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/component: audit
+data:
+  # Audit log format configuration
+  log-format: "json"
+  log-level: "info"
+  
+  # Event retention (for Kubernetes events)
+  event-retention-hours: "24"
+  
+  # Audit event types to log
+  log-rule-creation: "true"
+  log-rule-deletion: "true"
+  log-annotation-apply: "true"
+  log-annotation-remove: "true"
+  log-validation-failures: "true"
+  log-security-violations: "true"
+  
+  # Additional metadata to include in audit logs
+  include-user-info: "true"
+  include-resource-uid: "true"
+  include-timestamp: "true"

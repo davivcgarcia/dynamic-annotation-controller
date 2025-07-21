@@ -1,0 +1,43 @@
+apiVersion: scheduler.sandbox.davcgar.aws/v1
+kind: AnnotationScheduleRule
+metadata:
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: advanced-maintenance-groups
+spec:
+  schedule:
+    type: datetime
+    startTime: "2025-03-01T03:00:00Z"
+    endTime: "2025-03-01T05:00:00Z"
+  selector:
+    matchLabels:
+      tier: database
+      environment: production
+  annotationGroups:
+    - name: maintenance-start
+      atomic: true
+      operations:
+        - key: maintenance.example.com/status
+          value: "in-progress"
+          action: apply
+          priority: 100
+        - key: maintenance.example.com/start-time
+          value: "2025-03-01T03:00:00Z"
+          action: apply
+        - key: scaling.example.com/enabled
+          action: remove
+    - name: backup-preparation
+      operations:
+        - key: backup.example.com/pre-maintenance
+          value: "required"
+          action: apply
+        - key: backup.example.com/priority
+          value: "high"
+          action: apply
+        - key: backup.example.com/type
+          value: "full"
+          action: apply
+  targetResources:
+    - statefulsets
+  conflictResolution: priority

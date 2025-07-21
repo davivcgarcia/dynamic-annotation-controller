@@ -1,0 +1,149 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: annotation-scheduler-security-admin
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/role: security-admin
+rules:
+# Full access to annotation schedule rules
+- apiGroups:
+  - scheduler.sandbox.davcgar.aws
+  resources:
+  - annotationschedulerules
+  verbs:
+  - "*"
+- apiGroups:
+  - scheduler.sandbox.davcgar.aws
+  resources:
+  - annotationschedulerules/status
+  - annotationschedulerules/finalizers
+  verbs:
+  - "*"
+# Security configuration management
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+  resourceNames:
+  - annotation-scheduler-security-config
+  - annotation-scheduler-audit-config
+# Event access for audit review
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: annotation-scheduler-operator
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/role: operator
+rules:
+# Standard access to annotation schedule rules
+- apiGroups:
+  - scheduler.sandbox.davcgar.aws
+  resources:
+  - annotationschedulerules
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - scheduler.sandbox.davcgar.aws
+  resources:
+  - annotationschedulerules/status
+  verbs:
+  - get
+  - patch
+  - update
+# Read-only access to security configuration
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  resourceNames:
+  - annotation-scheduler-security-config
+  - annotation-scheduler-audit-config
+# Event access for monitoring
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: annotation-scheduler-viewer
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/role: viewer
+rules:
+# Read-only access to annotation schedule rules
+- apiGroups:
+  - scheduler.sandbox.davcgar.aws
+  resources:
+  - annotationschedulerules
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - scheduler.sandbox.davcgar.aws
+  resources:
+  - annotationschedulerules/status
+  verbs:
+  - get
+  - list
+  - watch
+# Read-only access to security configuration
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  resourceNames:
+  - annotation-scheduler-security-config
+  - annotation-scheduler-audit-config
+# Event access for monitoring
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - get
+  - list
+  - watch

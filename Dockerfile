@@ -3,6 +3,9 @@ FROM golang:1.24 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
+# Disable Go Proxy
+ENV GOPROXY=direct
+
 WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY go.mod go.mod

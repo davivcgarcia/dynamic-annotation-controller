@@ -1,0 +1,73 @@
+apiVersion: scheduler.sandbox.davcgar.aws/v1
+kind: AnnotationScheduleRule
+metadata:
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: cron-multi-annotation-example
+  namespace: default
+spec:
+  schedule:
+    type: cron
+    cronExpression: "0 2 * * *"  # Daily at 2 AM
+    action: apply
+  selector:
+    matchLabels:
+      maintenance: "enabled"
+  targetResources:
+    - pods
+    - deployments
+    - statefulsets
+  # Template variables
+  templateVariables:
+    maintenance_window: "02:00-04:00"
+    contact_team: "sre-team"
+    backup_policy: "daily"
+  # Use priority-based conflict resolution
+  conflictResolution: priority
+  # Maintenance annotation groups
+  annotationGroups:
+    - name: maintenance-schedule
+      atomic: true
+      operations:
+        - key: scheduler.k8s.io/managed-maintenance.window
+          value: "${maintenance_window}"
+          template: true
+          action: apply
+          priority: 100
+        - key: scheduler.k8s.io/managed-maintenance.contact
+          value: "${contact_team}"
+          template: true
+          action: apply
+          priority: 90
+        - key: scheduler.k8s.io/managed-maintenance.last-scheduled
+          value: "${date}"
+          template: true
+          action: apply
+          priority: 80
+    - name: backup-annotations
+      atomic: false
+      operations:
+        - key: scheduler.k8s.io/managed-backup.policy
+          value: "${backup_policy}"
+          template: true
+          action: apply
+          priority: 70
+        - key: scheduler.k8s.io/managed-backup.scheduled-time
+          value: "${time}"
+          template: true
+          action: apply
+          priority: 60
+    - name: resource-tracking
+      atomic: false
+      operations:
+        - key: scheduler.k8s.io/managed-tracking.resource-type
+          value: "${resource.name}"
+          template: true
+          action: apply
+          priority: 50
+        - key: scheduler.k8s.io/managed-tracking.namespace
+          value: "${resource.namespace}"
+          template: true
+          action: apply
+          priority: 40

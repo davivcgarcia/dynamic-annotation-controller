@@ -1,0 +1,77 @@
+apiVersion: scheduler.sandbox.davcgar.aws/v1
+kind: AnnotationScheduleRule
+metadata:
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: multi-annotation-example
+  namespace: default
+spec:
+  schedule:
+    type: datetime
+    startTime: "2025-07-20T10:00:00Z"
+    endTime: "2025-07-20T18:00:00Z"
+  selector:
+    matchLabels:
+      app: web-server
+  targetResources:
+    - pods
+    - deployments
+  # Template variables for use in annotation values
+  templateVariables:
+    environment: "production"
+    team: "platform"
+    version: "v2.1.0"
+  # Conflict resolution strategy
+  conflictResolution: priority
+  # Multiple annotation groups with different priorities and templating
+  annotationGroups:
+    - name: deployment-metadata
+      atomic: true
+      operations:
+        - key: scheduler.k8s.io/managed-deployment.version
+          value: "${version}"
+          template: true
+          action: apply
+          priority: 100
+        - key: scheduler.k8s.io/managed-deployment.environment
+          value: "${environment}"
+          template: true
+          action: apply
+          priority: 90
+        - key: scheduler.k8s.io/managed-deployment.team
+          value: "${team}"
+          template: true
+          action: apply
+          priority: 80
+    - name: runtime-info
+      atomic: false
+      operations:
+        - key: scheduler.k8s.io/managed-runtime.scheduled-at
+          value: "${timestamp}"
+          template: true
+          action: apply
+          priority: 70
+        - key: scheduler.k8s.io/managed-runtime.target
+          value: "${environment}-${resource.name}"
+          template: true
+          action: apply
+          priority: 60
+        - key: scheduler.k8s.io/managed-runtime.namespace
+          value: "${resource.namespace}"
+          template: true
+          action: apply
+          priority: 50
+    - name: resource-labels
+      atomic: false
+      operations:
+        - key: scheduler.k8s.io/managed-labels.app
+          value: "${resource.labels.app}"
+          template: true
+          action: apply
+          priority: 40
+        - key: scheduler.k8s.io/managed-labels.version
+          value: "${resource.labels.version}"
+          template: true
+          action: apply
+          priority: 30

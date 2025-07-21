@@ -1,0 +1,23 @@
+apiVersion: scheduler.sandbox.davcgar.aws/v1
+kind: AnnotationScheduleRule
+metadata:
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: daily-backup-tagging
+spec:
+  schedule:
+    type: cron
+    cronExpression: "0 2 * * *"  # Daily at 2 AM UTC
+    action: apply
+  selector:
+    matchLabels:
+      backup: "required"
+  annotations:
+    backup.example.com/scheduled: "true"
+    backup.example.com/schedule: "daily-2am"
+    backup.example.com/retention: "30d"
+    backup.example.com/priority: "normal"
+  targetResources:
+    - pods
+    - statefulsets

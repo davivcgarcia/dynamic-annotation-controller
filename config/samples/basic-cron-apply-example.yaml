@@ -1,0 +1,27 @@
+apiVersion: scheduler.sandbox.davcgar.aws/v1
+kind: AnnotationScheduleRule
+metadata:
+  name: basic-cron-apply-example
+  namespace: default
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  # Cron-based scheduling - apply annotations every Monday at 2 AM
+  schedule:
+    type: cron
+    cronExpression: "0 2 * * 1"
+    action: apply
+  # Target production workloads
+  selector:
+    matchLabels:
+      environment: production
+  # Apply backup-related annotations
+  annotations:
+    backup.example.com/enabled: "true"
+    backup.example.com/schedule: "weekly"
+    backup.example.com/retention: "30d"
+  # Target StatefulSets and Deployments
+  targetResources:
+    - statefulsets
+    - deployments

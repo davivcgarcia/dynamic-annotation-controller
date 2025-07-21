@@ -1,0 +1,22 @@
+apiVersion: scheduler.sandbox.davcgar.aws/v1
+kind: AnnotationScheduleRule
+metadata:
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: business-hours-scaling
+spec:
+  schedule:
+    type: cron
+    cronExpression: "0 9 * * 1-5"  # Weekdays at 9 AM UTC
+    action: apply
+  selector:
+    matchLabels:
+      scaling: "business-hours"
+  annotations:
+    scaling.example.com/mode: "business-hours"
+    scaling.example.com/min-replicas: "3"
+    scaling.example.com/max-replicas: "10"
+    scaling.example.com/schedule: "weekdays-9am"
+  targetResources:
+    - deployments

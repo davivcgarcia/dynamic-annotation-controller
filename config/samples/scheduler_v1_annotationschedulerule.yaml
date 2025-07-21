@@ -1,0 +1,21 @@
+apiVersion: scheduler.sandbox.davcgar.aws/v1
+kind: AnnotationScheduleRule
+metadata:
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: annotationschedulerule-sample
+spec:
+  schedule:
+    type: datetime
+    startTime: "2025-01-20T10:00:00Z"
+    endTime: "2025-01-20T18:00:00Z"
+  selector:
+    matchLabels:
+      app: web-server
+  annotations:
+    maintenance.example.com/window: "active"
+    maintenance.example.com/contact: "ops-team@example.com"
+  targetResources:
+    - pods
+    - deployments

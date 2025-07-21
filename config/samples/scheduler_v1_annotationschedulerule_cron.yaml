@@ -1,0 +1,21 @@
+apiVersion: scheduler.sandbox.davcgar.aws/v1
+kind: AnnotationScheduleRule
+metadata:
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: annotationschedulerule-cron-sample
+spec:
+  schedule:
+    type: cron
+    cronExpression: "0 2 * * 1"  # Every Monday at 2 AM
+    action: apply
+  selector:
+    matchLabels:
+      environment: production
+  annotations:
+    backup.example.com/scheduled: "true"
+    backup.example.com/frequency: "weekly"
+  targetResources:
+    - statefulsets
+    - deployments

@@ -37,11 +37,11 @@ make run
 ### Container Operations
 ```bash
 # Build and push container image
-make docker-build IMG=dynamic-annotation-controller:latest
-make docker-push IMG=dynamic-annotation-controller:latest
+make docker-build IMG=docker.io/davivcgarcia/dynamic-annotation-controller:latest
+make docker-push IMG=docker.io/davivcgarcia/dynamic-annotation-controller:latest
 
 # Build multi-arch images
-make docker-buildx IMG=dynamic-annotation-controller:latest
+make docker-buildx IMG=docker.io/davivcgarcia/dynamic-annotation-controller:latest
 ```
 
 ### Kubernetes Deployment
@@ -50,7 +50,7 @@ make docker-buildx IMG=dynamic-annotation-controller:latest
 make install
 
 # Deploy controller to cluster
-make deploy IMG=dynamic-annotation-controller:latest
+make deploy IMG=docker.io/davivcgarcia/dynamic-annotation-controller:latest
 
 # Undeploy controller
 make undeploy

@@ -1,0 +1,29 @@
+apiVersion: scheduler.sandbox.davcgar.aws/v1
+kind: AnnotationScheduleRule
+metadata:
+  name: basic-cron-remove-example
+  namespace: default
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  # Cron-based scheduling - remove annotations every Sunday at 11 PM
+  schedule:
+    type: cron
+    cronExpression: "0 23 * * 0"
+    action: remove
+  # Target development workloads
+  selector:
+    matchLabels:
+      environment: development
+  # Remove temporary annotations
+  annotations:
+    temp.example.com/debug: ""
+    temp.example.com/experiment: ""
+    temp.example.com/feature-flag: ""
+  # Target all supported resource types
+  targetResources:
+    - pods
+    - deployments
+    - statefulsets
+    - daemonsets

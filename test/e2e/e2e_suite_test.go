@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -31,15 +32,19 @@ import (
 var (
 	// Optional Environment Variables:
 	// - CERT_MANAGER_INSTALL_SKIP=true: Skips CertManager installation during test setup.
-	// These variables are useful if CertManager is already installed, avoiding
-	// re-installation and conflicts.
+	// - DOCKER_BUILD_SKIP=true: Skips Docker image build (assumes image already exists).
+	// - USE_LOCAL_BINARY=true: Uses locally built binary instead of Docker image.
+	// These variables are useful if CertManager is already installed or image already built,
+	// avoiding re-installation and conflicts.
 	skipCertManagerInstall = os.Getenv("CERT_MANAGER_INSTALL_SKIP") == "true"
+	skipDockerBuild        = os.Getenv("DOCKER_BUILD_SKIP") == "true"
+	useLocalBinary         = os.Getenv("USE_LOCAL_BINARY") == "true"
 	// isCertManagerAlreadyInstalled will be set true when CertManager CRDs be found on the cluster
 	isCertManagerAlreadyInstalled = false
 
 	// projectImage is the name of the image which will be build and loaded
 	// with the code source changes to be tested.
-	projectImage = "example.com/dynamic-annotation-controller:v0.0.1"
+	projectImage = "docker.io/davivcgarcia/dynamic-annotation-controller:latest"
 )
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
@@ -53,16 +58,39 @@ func TestE2E(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	By("building the manager(Operator) image")
-	cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectImage))
-	_, err := utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the manager(Operator) image")
+	if useLocalBinary {
+		By("building the manager binary locally")
+		cmd := exec.Command("make", "build")
+		_, err := utils.Run(cmd)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the manager binary locally")
+		_, _ = fmt.Fprintf(GinkgoWriter, "Using local binary mode for testing\n")
+	} else {
+		if !skipDockerBuild {
+			By("building the manager(Operator) image")
+			var err error
+			maxRetries := 3
+			for i := 0; i < maxRetries; i++ {
+				cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectImage))
+				_, err = utils.Run(cmd)
+				if err == nil {
+					break
+				}
+				if i < maxRetries-1 {
+					_, _ = fmt.Fprintf(GinkgoWriter, "Docker build failed (attempt %d/%d), retrying in 30 seconds...\n", i+1, maxRetries)
+					time.Sleep(30 * time.Second)
+				}
+			}
+			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the manager(Operator) image after %d attempts", maxRetries)
+		} else {
+			_, _ = fmt.Fprintf(GinkgoWriter, "Skipping Docker build (DOCKER_BUILD_SKIP=true)\n")
+		}
 
-	// TODO(user): If you want to change the e2e test vendor from Kind, ensure the image is
-	// built and available before running the tests. Also, remove the following block.
-	By("loading the manager(Operator) image on Kind")
-	err = utils.LoadImageToKindClusterWithName(projectImage)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager(Operator) image into Kind")
+		// TODO(user): If you want to change the e2e test vendor from Kind, ensure the image is
+		// built and available before running the tests. Also, remove the following block.
+		By("loading the manager(Operator) image on Kind")
+		err := utils.LoadImageToKindClusterWithName(projectImage)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager(Operator) image into Kind")
+	}
 
 	// The tests-e2e are intended to run on a temporary cluster that is created and destroyed for testing.
 	// To prevent errors when tests run in environments with CertManager already installed,

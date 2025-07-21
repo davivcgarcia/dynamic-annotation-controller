@@ -1,0 +1,66 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: annotation-scheduler-security-admin-binding
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/role: security-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: annotation-scheduler-security-admin
+subjects:
+# Add specific users or service accounts that should have security admin access
+# Example:
+# - kind: User
+#   name: security-admin@company.com
+#   apiGroup: rbac.authorization.k8s.io
+# - kind: ServiceAccount
+#   name: annotation-scheduler-admin
+#   namespace: annotation-scheduler-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: annotation-scheduler-operator-binding
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/role: operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: annotation-scheduler-operator
+subjects:
+# Add specific users or service accounts that should have operator access
+# Example:
+# - kind: User
+#   name: platform-team@company.com
+#   apiGroup: rbac.authorization.k8s.io
+# - kind: ServiceAccount
+#   name: annotation-scheduler-operator
+#   namespace: annotation-scheduler-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: annotation-scheduler-viewer-binding
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/role: viewer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: annotation-scheduler-viewer
+subjects:
+# Add specific users or service accounts that should have viewer access
+# Example:
+# - kind: User
+#   name: developers@company.com
+#   apiGroup: rbac.authorization.k8s.io
+# - kind: ServiceAccount
+#   name: annotation-scheduler-viewer
+#   namespace: annotation-scheduler-system

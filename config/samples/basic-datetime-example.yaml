@@ -1,0 +1,27 @@
+apiVersion: scheduler.sandbox.davcgar.aws/v1
+kind: AnnotationScheduleRule
+metadata:
+  name: basic-datetime-example
+  namespace: default
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  # Simple datetime-based scheduling
+  schedule:
+    type: datetime
+    startTime: "2025-01-20T09:00:00Z"
+    endTime: "2025-01-20T17:00:00Z"
+  # Target all pods with app=web label
+  selector:
+    matchLabels:
+      app: web
+  # Apply maintenance annotations
+  annotations:
+    maintenance.example.com/window: "business-hours"
+    maintenance.example.com/contact: "platform-team@example.com"
+    maintenance.example.com/reason: "scheduled-maintenance"
+  # Target both pods and their controllers
+  targetResources:
+    - pods
+    - deployments

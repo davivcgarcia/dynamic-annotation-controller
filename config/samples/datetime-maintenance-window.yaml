@@ -1,0 +1,24 @@
+apiVersion: scheduler.sandbox.davcgar.aws/v1
+kind: AnnotationScheduleRule
+metadata:
+  labels:
+    app.kubernetes.io/name: dynamic-annotation-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: maintenance-window-example
+spec:
+  schedule:
+    type: datetime
+    startTime: "2025-02-15T02:00:00Z"
+    endTime: "2025-02-15T06:00:00Z"
+  selector:
+    matchLabels:
+      environment: production
+      tier: backend
+  annotations:
+    maintenance.example.com/window: "active"
+    maintenance.example.com/contact: "sre-team@example.com"
+    maintenance.example.com/reason: "security-patches"
+    maintenance.example.com/duration: "4h"
+  targetResources:
+    - deployments
+    - statefulsets
