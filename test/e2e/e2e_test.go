@@ -285,20 +285,23 @@ var _ = Describe("Manager", Ordered, func() {
 
 		It("should create and validate AnnotationScheduleRule CRDs", func() {
 			By("applying a sample AnnotationScheduleRule")
-			cmd := exec.Command("kubectl", "apply", "-f", "config/samples/scheduler_v1_annotationschedulerule.yaml", "-n", namespace)
+			cmd := exec.Command("kubectl", "apply", "-f",
+				"config/samples/scheduler_v1_annotationschedulerule.yaml", "-n", namespace)
 			_, err := utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred(), "Failed to apply sample AnnotationScheduleRule")
 
 			By("verifying the AnnotationScheduleRule was created")
 			Eventually(func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "annotationschedulerule", "annotationschedulerule-sample", "-n", namespace, "-o", "jsonpath={.metadata.name}")
+				cmd := exec.Command("kubectl", "get", "annotationschedulerule",
+					"annotationschedulerule-sample", "-n", namespace, "-o", "jsonpath={.metadata.name}")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(output).To(Equal("annotationschedulerule-sample"))
 			}).Should(Succeed())
 
 			By("verifying the AnnotationScheduleRule has expected fields")
-			cmd = exec.Command("kubectl", "get", "annotationschedulerule", "annotationschedulerule-sample", "-n", namespace, "-o", "yaml")
+			cmd = exec.Command("kubectl", "get", "annotationschedulerule",
+				"annotationschedulerule-sample", "-n", namespace, "-o", "yaml")
 			output, err := utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(output).To(ContainSubstring("schedule:"))
@@ -316,7 +319,8 @@ var _ = Describe("Manager", Ordered, func() {
 			}
 
 			By("cleaning up the sample AnnotationScheduleRule")
-			cmd = exec.Command("kubectl", "delete", "-f", "config/samples/scheduler_v1_annotationschedulerule.yaml", "-n", namespace)
+			cmd = exec.Command("kubectl", "delete", "-f",
+				"config/samples/scheduler_v1_annotationschedulerule.yaml", "-n", namespace)
 			_, _ = utils.Run(cmd)
 		})
 	})

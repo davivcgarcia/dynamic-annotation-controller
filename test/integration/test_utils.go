@@ -21,7 +21,10 @@ import (
 	"fmt"
 	"time"
 
+	// Using dot imports for Ginkgo and Gomega is the recommended approach for BDD-style tests
+	// nolint:staticcheck
 	. "github.com/onsi/ginkgo/v2"
+	// nolint:staticcheck
 	. "github.com/onsi/gomega"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -40,9 +43,9 @@ type TestResourceBuilder struct {
 }
 
 // NewTestResourceBuilder creates a new test resource builder
-func NewTestResourceBuilder(client client.Client, namespace string) *TestResourceBuilder {
+func NewTestResourceBuilder(cl client.Client, namespace string) *TestResourceBuilder {
 	return &TestResourceBuilder{
-		client:    client,
+		client:    cl,
 		namespace: namespace,
 	}
 }
@@ -187,15 +190,17 @@ type RuleBuilder struct {
 }
 
 // NewRuleBuilder creates a new rule builder
-func NewRuleBuilder(client client.Client, namespace string) *RuleBuilder {
+func NewRuleBuilder(cl client.Client, namespace string) *RuleBuilder {
 	return &RuleBuilder{
-		client:    client,
+		client:    cl,
 		namespace: namespace,
 	}
 }
 
 // CreateDateTimeRule creates a datetime-based rule
-func (b *RuleBuilder) CreateDateTimeRule(name string, startTime, endTime *time.Time, selector map[string]string, annotations map[string]string, targetResources []string) *schedulerv1.AnnotationScheduleRule {
+func (b *RuleBuilder) CreateDateTimeRule(name string, startTime, endTime *time.Time,
+	selector map[string]string, annotations map[string]string,
+	targetResources []string) *schedulerv1.AnnotationScheduleRule {
 	rule := &schedulerv1.AnnotationScheduleRule{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -225,7 +230,9 @@ func (b *RuleBuilder) CreateDateTimeRule(name string, startTime, endTime *time.T
 }
 
 // CreateCronRule creates a cron-based rule
-func (b *RuleBuilder) CreateCronRule(name, cronExpression, action string, selector map[string]string, annotations map[string]string, targetResources []string) *schedulerv1.AnnotationScheduleRule {
+func (b *RuleBuilder) CreateCronRule(name, cronExpression, action string,
+	selector map[string]string, annotations map[string]string,
+	targetResources []string) *schedulerv1.AnnotationScheduleRule {
 	rule := &schedulerv1.AnnotationScheduleRule{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -255,8 +262,8 @@ type TestAssertions struct {
 }
 
 // NewTestAssertions creates a new test assertions helper
-func NewTestAssertions(client client.Client) *TestAssertions {
-	return &TestAssertions{client: client}
+func NewTestAssertions(cl client.Client) *TestAssertions {
+	return &TestAssertions{client: cl}
 }
 
 // ExpectRulePhase asserts that a rule has the expected phase
@@ -275,7 +282,9 @@ func (a *TestAssertions) ExpectRulePhase(ruleName, namespace, expectedPhase stri
 }
 
 // ExpectResourceAnnotations asserts that a resource has the expected annotations
-func (a *TestAssertions) ExpectResourceAnnotations(resourceName, namespace string, resource client.Object, expectedAnnotations map[string]string, timeout, interval time.Duration) {
+func (a *TestAssertions) ExpectResourceAnnotations(resourceName, namespace string,
+	resource client.Object, expectedAnnotations map[string]string,
+	timeout, interval time.Duration) {
 	Eventually(func() bool {
 		err := a.client.Get(context.TODO(), types.NamespacedName{
 			Name:      resourceName,
@@ -298,7 +307,8 @@ func (a *TestAssertions) ExpectResourceAnnotations(resourceName, namespace strin
 }
 
 // ExpectResourceMissingAnnotations asserts that a resource does not have specific annotations
-func (a *TestAssertions) ExpectResourceMissingAnnotations(resourceName, namespace string, resource client.Object, missingKeys []string, timeout, interval time.Duration) {
+func (a *TestAssertions) ExpectResourceMissingAnnotations(resourceName, namespace string,
+	resource client.Object, missingKeys []string, timeout, interval time.Duration) {
 	Eventually(func() bool {
 		err := a.client.Get(context.TODO(), types.NamespacedName{
 			Name:      resourceName,
@@ -321,7 +331,8 @@ func (a *TestAssertions) ExpectResourceMissingAnnotations(resourceName, namespac
 }
 
 // ExpectRuleCondition asserts that a rule has a specific condition
-func (a *TestAssertions) ExpectRuleCondition(ruleName, namespace, conditionType string, status metav1.ConditionStatus, timeout, interval time.Duration) {
+func (a *TestAssertions) ExpectRuleCondition(ruleName, namespace, conditionType string,
+	status metav1.ConditionStatus, timeout, interval time.Duration) {
 	Eventually(func() bool {
 		var rule schedulerv1.AnnotationScheduleRule
 		err := a.client.Get(context.TODO(), types.NamespacedName{
@@ -342,7 +353,8 @@ func (a *TestAssertions) ExpectRuleCondition(ruleName, namespace, conditionType 
 }
 
 // ExpectRuleExecutionCount asserts that a rule has executed a minimum number of times
-func (a *TestAssertions) ExpectRuleExecutionCount(ruleName, namespace string, minCount int64, timeout, interval time.Duration) {
+func (a *TestAssertions) ExpectRuleExecutionCount(ruleName, namespace string, minCount int64,
+	timeout, interval time.Duration) {
 	Eventually(func() int64 {
 		var rule schedulerv1.AnnotationScheduleRule
 		err := a.client.Get(context.TODO(), types.NamespacedName{

@@ -156,7 +156,7 @@ func (eh *ErrorHandler) CategorizeError(err error) ErrorCategory {
 // isNetworkError checks if an error is network-related
 func (eh *ErrorHandler) isNetworkError(err error) bool {
 	if netErr, ok := err.(net.Error); ok {
-		return netErr.Timeout() || netErr.Temporary()
+		return netErr.Timeout()
 	}
 
 	// Check for common network error patterns
@@ -169,6 +169,7 @@ func (eh *ErrorHandler) isNetworkError(err error) bool {
 		"dns",
 		"dial tcp",
 		"i/o timeout",
+		"temporary",
 	}
 
 	for _, pattern := range networkPatterns {
@@ -347,7 +348,7 @@ func (eh *ErrorHandler) RetryWithBackoffAndCondition(ctx context.Context, operat
 
 // WaitForCondition waits for a condition to be met with timeout and retry logic
 func (eh *ErrorHandler) WaitForCondition(ctx context.Context, condition func() (bool, error), timeout time.Duration, operationName string) error {
-	return wait.PollImmediate(eh.config.BaseDelay, timeout, func() (bool, error) {
+	return wait.PollUntilContextTimeout(ctx, eh.config.BaseDelay, timeout, true, func(ctx context.Context) (bool, error) {
 		done, err := condition()
 		if err != nil {
 			category := eh.CategorizeError(err)

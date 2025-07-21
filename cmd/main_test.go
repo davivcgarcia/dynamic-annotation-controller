@@ -23,8 +23,8 @@ import (
 
 func TestValidateStartupConfiguration(t *testing.T) {
 	// Test with no configuration - should fail
-	os.Unsetenv("KUBERNETES_SERVICE_HOST")
-	os.Unsetenv("KUBECONFIG")
+	_ = os.Unsetenv("KUBERNETES_SERVICE_HOST")
+	_ = os.Unsetenv("KUBECONFIG")
 
 	err := validateStartupConfiguration()
 	if err == nil {
@@ -37,7 +37,7 @@ func TestValidateStartupConfiguration(t *testing.T) {
 	}
 }
 
-func TestMainFunctionFlags(t *testing.T) {
+func TestMainFunctionFlags(_ *testing.T) {
 	// Test that main function can be called with help flag
 	// This is a basic smoke test to ensure the flag parsing works
 	oldArgs := os.Args

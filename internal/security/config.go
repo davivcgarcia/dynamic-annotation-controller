@@ -46,9 +46,9 @@ type SecurityConfigLoader struct {
 }
 
 // NewSecurityConfigLoader creates a new SecurityConfigLoader
-func NewSecurityConfigLoader(client client.Client, namespace string) *SecurityConfigLoader {
+func NewSecurityConfigLoader(k8sClient client.Client, namespace string) *SecurityConfigLoader {
 	return &SecurityConfigLoader{
-		Client:    client,
+		Client:    k8sClient,
 		Namespace: namespace,
 	}
 }

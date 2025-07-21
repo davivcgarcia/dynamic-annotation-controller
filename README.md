@@ -1,6 +1,6 @@
 # dynamic-annotation-controller
 
-> [!NOTE] This project was developed as a personal experiment using vibe coding on Kiro. It's not intended for production use and is primarily a learning exercise.
+> This project was developed as a personal experiment using vibe coding on Kiro. It's not intended for production use and is primarily a learning exercise.
 
 A Kubernetes controller that dynamically manages annotations on resources based on configurable rules and schedules. This controller enables automated annotation management for infrastructure automation, policy enforcement, and resource lifecycle management.
 

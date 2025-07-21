@@ -135,9 +135,9 @@ type TaskExecutor struct {
 }
 
 // NewTaskExecutor creates a new TaskExecutor
-func NewTaskExecutor(client client.Client, resourceManager *resource.ResourceManager, log logr.Logger, reconciler *AnnotationScheduleRuleReconciler) *TaskExecutor {
+func NewTaskExecutor(cl client.Client, resourceManager *resource.ResourceManager, log logr.Logger, reconciler *AnnotationScheduleRuleReconciler) *TaskExecutor {
 	return &TaskExecutor{
-		client:          client,
+		client:          cl,
 		resourceManager: resourceManager,
 		log:             log,
 		reconciler:      reconciler,
@@ -375,13 +375,13 @@ func (te *TaskExecutor) executeApplyAction(ctx context.Context, task scheduler.S
 
 		// Audit log the annotation application for each affected resource
 		if te.reconciler != nil && te.reconciler.AuditLogger != nil {
-			for _, resource := range resources {
+			for _, res := range resources {
 				te.reconciler.AuditLogger.LogAnnotationApply(
 					ctx,
 					task.RuleID,
 					task.RuleName,
 					task.RuleNamespace,
-					resource,
+					res,
 					task.Annotations,
 					err == nil,
 					err,
@@ -514,13 +514,13 @@ func (te *TaskExecutor) executeRemoveAction(ctx context.Context, task scheduler.
 
 		// Audit log the annotation removal for each affected resource
 		if te.reconciler != nil && te.reconciler.AuditLogger != nil {
-			for _, resource := range resources {
+			for _, res := range resources {
 				te.reconciler.AuditLogger.LogAnnotationRemove(
 					ctx,
 					task.RuleID,
 					task.RuleName,
 					task.RuleNamespace,
-					resource,
+					res,
 					keys,
 					err == nil,
 					err,
@@ -672,13 +672,62 @@ func (r *AnnotationScheduleRuleReconciler) safeReconcile(ctx context.Context, re
 // doReconcile contains the main reconciliation logic
 func (r *AnnotationScheduleRuleReconciler) doReconcile(ctx context.Context, req ctrl.Request, log logr.Logger) (ctrl.Result, error) {
 	// Fetch the AnnotationScheduleRule instance with retry logic
+	rule, fetchResult, fetchErr := r.fetchRule(ctx, req, log)
+	if fetchErr != nil {
+		return fetchResult, fetchErr
+	}
+
+	// Handle deletion
+	if rule.DeletionTimestamp != nil {
+		return r.handleDeletion(ctx, rule)
+	}
+
+	// Add finalizer if not present with error handling
+	finalizerResult, finalizerErr := r.ensureFinalizer(ctx, rule, req, log)
+	// nolint:staticcheck // Using Requeue for backward compatibility
+	if finalizerErr != nil || finalizerResult.RequeueAfter > 0 || finalizerResult.Requeue {
+		return finalizerResult, finalizerErr
+	}
+
+	// Validate the rule
+	if validationErr := r.validateAndUpdateRuleOnFailure(ctx, rule, log); validationErr != nil {
+		return ctrl.Result{}, nil
+	}
+
+	// Schedule the rule
+	scheduleResult, scheduleErr := r.scheduleRuleWithErrorHandling(ctx, rule, log)
+	if scheduleErr != nil {
+		return scheduleResult, scheduleErr
+	}
+
+	// Process next execution time
+	nextExecResult, nextExecErr := r.processNextExecutionTime(ctx, rule, log)
+	if nextExecErr != nil || nextExecResult.RequeueAfter > 0 {
+		return nextExecResult, nextExecErr
+	}
+
+	// Update rule status
+	r.updateRuleActiveStatus(ctx, rule)
+
+	// Update status with error handling
+	statusResult, statusErr := r.updateRuleStatusWithErrorHandling(ctx, rule, log)
+	if statusErr != nil {
+		return statusResult, statusErr
+	}
+
+	// Requeue to check for status updates periodically
+	return ctrl.Result{RequeueAfter: time.Minute * 10}, nil
+}
+
+// fetchRule fetches the rule with error handling
+func (r *AnnotationScheduleRuleReconciler) fetchRule(ctx context.Context, req ctrl.Request, log logr.Logger) (*schedulerv1.AnnotationScheduleRule, ctrl.Result, error) {
 	rule := &schedulerv1.AnnotationScheduleRule{}
 	var fetchErr error
 
 	if r.ErrorHandler != nil {
 		fetchErr = r.ErrorHandler.RetryWithBackoff(ctx, func() error {
 			return r.Get(ctx, req.NamespacedName, rule)
-		}, fmt.Sprintf("get-rule-%s", req.NamespacedName.String()))
+		}, fmt.Sprintf("get-rule-%s", req.String()))
 	} else {
 		fetchErr = r.Get(ctx, req.NamespacedName, rule)
 	}
@@ -686,11 +735,11 @@ func (r *AnnotationScheduleRuleReconciler) doReconcile(ctx context.Context, req 
 	if fetchErr != nil {
 		if apierrors.IsNotFound(fetchErr) {
 			// Rule was deleted, unschedule it
-			ruleID := req.NamespacedName.String()
+			ruleID := req.String()
 			if err := r.Scheduler.UnscheduleRule(ruleID); err != nil {
 				log.Error(err, "Failed to unschedule deleted rule", "ruleID", ruleID)
 			}
-			return ctrl.Result{}, nil
+			return nil, ctrl.Result{}, nil
 		}
 
 		// Log error details with categorization
@@ -706,18 +755,17 @@ func (r *AnnotationScheduleRuleReconciler) doReconcile(ctx context.Context, req 
 		// Determine requeue strategy based on error type
 		if r.ErrorHandler != nil && r.ErrorHandler.ShouldRetry(fetchErr, 0) {
 			delay := r.ErrorHandler.CalculateDelay(1)
-			return ctrl.Result{RequeueAfter: delay}, nil
+			return nil, ctrl.Result{RequeueAfter: delay}, nil
 		}
 
-		return ctrl.Result{}, fetchErr
+		return nil, ctrl.Result{}, fetchErr
 	}
 
-	// Handle deletion
-	if rule.DeletionTimestamp != nil {
-		return r.handleDeletion(ctx, rule)
-	}
+	return rule, ctrl.Result{}, nil
+}
 
-	// Add finalizer if not present with error handling
+// ensureFinalizer ensures the finalizer is present on the rule
+func (r *AnnotationScheduleRuleReconciler) ensureFinalizer(ctx context.Context, rule *schedulerv1.AnnotationScheduleRule, req ctrl.Request, log logr.Logger) (ctrl.Result, error) {
 	if !controllerutil.ContainsFinalizer(rule, AnnotationScheduleRuleFinalizer) {
 		controllerutil.AddFinalizer(rule, AnnotationScheduleRuleFinalizer)
 
@@ -725,7 +773,7 @@ func (r *AnnotationScheduleRuleReconciler) doReconcile(ctx context.Context, req 
 		if r.ErrorHandler != nil {
 			updateErr = r.ErrorHandler.RetryWithBackoff(ctx, func() error {
 				return r.Update(ctx, rule)
-			}, fmt.Sprintf("add-finalizer-%s", req.NamespacedName.String()))
+			}, fmt.Sprintf("add-finalizer-%s", req.String()))
 		} else {
 			updateErr = r.Update(ctx, rule)
 		}
@@ -744,7 +792,11 @@ func (r *AnnotationScheduleRuleReconciler) doReconcile(ctx context.Context, req 
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	// Validate the rule
+	return ctrl.Result{}, nil
+}
+
+// validateAndUpdateRuleOnFailure validates the rule and updates status on failure
+func (r *AnnotationScheduleRuleReconciler) validateAndUpdateRuleOnFailure(ctx context.Context, rule *schedulerv1.AnnotationScheduleRule, log logr.Logger) error {
 	if err := r.validateRule(rule); err != nil {
 		log.Error(err, "Rule validation failed", "rule", rule.Name, "namespace", rule.Namespace)
 		r.setCondition(rule, ConditionTypeValidated, metav1.ConditionFalse, ReasonValidationFailed,
@@ -756,7 +808,7 @@ func (r *AnnotationScheduleRuleReconciler) doReconcile(ctx context.Context, req 
 		if statusErr := r.Status().Update(ctx, rule); statusErr != nil {
 			log.Error(statusErr, "Failed to update rule status after validation failure")
 		}
-		return ctrl.Result{}, nil
+		return err
 	}
 
 	// Update validation condition
@@ -764,7 +816,11 @@ func (r *AnnotationScheduleRuleReconciler) doReconcile(ctx context.Context, req 
 	// Clear any previous validation errors
 	r.setCondition(rule, ConditionTypeError, metav1.ConditionFalse, ReasonValidationSucceeded, "No validation errors")
 
-	// Schedule or update the rule in the scheduler with error handling
+	return nil
+}
+
+// scheduleRuleWithErrorHandling schedules the rule with error handling
+func (r *AnnotationScheduleRuleReconciler) scheduleRuleWithErrorHandling(ctx context.Context, rule *schedulerv1.AnnotationScheduleRule, log logr.Logger) (ctrl.Result, error) {
 	var scheduleErr error
 	if r.ErrorHandler != nil {
 		scheduleErr = r.ErrorHandler.RetryWithBackoff(ctx, func() error {
@@ -819,7 +875,7 @@ func (r *AnnotationScheduleRuleReconciler) doReconcile(ctx context.Context, req 
 			}
 		}
 
-		return ctrl.Result{RequeueAfter: requeueDelay}, nil
+		return ctrl.Result{RequeueAfter: requeueDelay}, scheduleErr
 	}
 
 	// Update scheduling condition
@@ -827,32 +883,43 @@ func (r *AnnotationScheduleRuleReconciler) doReconcile(ctx context.Context, req 
 	// Clear any previous scheduling errors
 	r.setCondition(rule, ConditionTypeError, metav1.ConditionFalse, ReasonSchedulingSucceeded, "No scheduling errors")
 
-	// Get next execution time from scheduler and update status
+	return ctrl.Result{}, nil
+}
+
+// processNextExecutionTime processes the next execution time for the rule
+// nolint:unparam // Keeping consistent return type for all reconciler methods
+func (r *AnnotationScheduleRuleReconciler) processNextExecutionTime(ctx context.Context, rule *schedulerv1.AnnotationScheduleRule, log logr.Logger) (ctrl.Result, error) {
 	ruleID := r.getRuleID(rule)
 	nextExecution, err := r.Scheduler.GetNextExecutionTime(ruleID)
 	if err != nil {
 		log.Error(err, "Failed to get next execution time", "ruleID", ruleID)
 		r.setCondition(rule, ConditionTypeError, metav1.ConditionTrue, "NextExecutionError",
 			fmt.Sprintf("Failed to get next execution time: %v", err))
-	} else if nextExecution != nil {
+		return ctrl.Result{}, err
+	}
+
+	if nextExecution != nil {
 		rule.Status.NextExecutionTime = &metav1.Time{Time: *nextExecution}
 		log.V(1).Info("Next execution time updated",
 			"ruleID", ruleID,
 			"nextExecution", nextExecution.Format(time.RFC3339))
-	} else {
-		// No next execution means rule is completed
-		log.Info("Rule has no next execution time, marking as completed", "ruleID", ruleID)
-		r.updateRuleStatus(ctx, rule, PhaseCompleted, "Rule schedule completed")
-		r.setCondition(rule, ConditionTypeReady, metav1.ConditionTrue, ReasonRuleCompleted, "Rule schedule completed")
-
-		// Update status and return
-		if statusErr := r.Status().Update(ctx, rule); statusErr != nil {
-			log.Error(statusErr, "Failed to update rule status after completion")
-		}
 		return ctrl.Result{}, nil
 	}
 
-	// Update rule status to active if not already
+	// No next execution means rule is completed
+	log.Info("Rule has no next execution time, marking as completed", "ruleID", ruleID)
+	r.updateRuleStatus(ctx, rule, PhaseCompleted, "Rule schedule completed")
+	r.setCondition(rule, ConditionTypeReady, metav1.ConditionTrue, ReasonRuleCompleted, "Rule schedule completed")
+
+	// Update status and return
+	if statusErr := r.Status().Update(ctx, rule); statusErr != nil {
+		log.Error(statusErr, "Failed to update rule status after completion")
+	}
+	return ctrl.Result{}, nil
+}
+
+// updateRuleActiveStatus updates the rule status to active if not already
+func (r *AnnotationScheduleRuleReconciler) updateRuleActiveStatus(ctx context.Context, rule *schedulerv1.AnnotationScheduleRule) {
 	if rule.Status.Phase == "" || rule.Status.Phase == PhasePending {
 		r.updateRuleStatus(ctx, rule, PhaseActive, "Rule is active and scheduled")
 
@@ -867,8 +934,10 @@ func (r *AnnotationScheduleRuleReconciler) doReconcile(ctx context.Context, req 
 
 	// Log current status for monitoring
 	r.logRuleStatus(rule)
+}
 
-	// Update the status with error handling
+// updateRuleStatusWithErrorHandling updates the rule status with error handling
+func (r *AnnotationScheduleRuleReconciler) updateRuleStatusWithErrorHandling(ctx context.Context, rule *schedulerv1.AnnotationScheduleRule, log logr.Logger) (ctrl.Result, error) {
 	statusUpdateErr := func() error {
 		return r.Status().Update(ctx, rule)
 	}
@@ -893,8 +962,7 @@ func (r *AnnotationScheduleRuleReconciler) doReconcile(ctx context.Context, req 
 		}
 	}
 
-	// Requeue to check for status updates periodically
-	return ctrl.Result{RequeueAfter: time.Minute * 10}, nil
+	return ctrl.Result{}, nil
 }
 
 // handleDeletion handles the deletion of an AnnotationScheduleRule
@@ -968,62 +1036,114 @@ func (r *AnnotationScheduleRuleReconciler) cleanupRuleAnnotations(ctx context.Co
 // validateRule validates the AnnotationScheduleRule configuration
 func (r *AnnotationScheduleRuleReconciler) validateRule(rule *schedulerv1.AnnotationScheduleRule) error {
 	// Validate resource types
+	if err := r.validateResourceTypes(rule); err != nil {
+		return err
+	}
+
+	// Validate annotations configuration
+	if err := r.validateAnnotationsConfig(rule); err != nil {
+		return err
+	}
+
+	// Validate conflict resolution strategy
+	if err := r.validateConflictResolution(rule); err != nil {
+		return err
+	}
+
+	// Validate template variables
+	if err := r.validateTemplateVariables(rule); err != nil {
+		return err
+	}
+
+	// Validate schedule configuration
+	if err := r.validateScheduleConfig(rule); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateResourceTypes validates the target resource types
+func (r *AnnotationScheduleRuleReconciler) validateResourceTypes(rule *schedulerv1.AnnotationScheduleRule) error {
 	if unsupported := r.ResourceManager.ValidateResourceTypes(rule.Spec.TargetResources); len(unsupported) > 0 {
 		return fmt.Errorf("unsupported resource types: %v", unsupported)
 	}
+	return nil
+}
 
-	// Validate that either legacy annotations or annotation groups are specified, but not both
+// validateAnnotationsConfig validates the annotations configuration
+func (r *AnnotationScheduleRuleReconciler) validateAnnotationsConfig(rule *schedulerv1.AnnotationScheduleRule) error {
 	hasLegacyAnnotations := len(rule.Spec.Annotations) > 0
 	hasAnnotationGroups := len(rule.Spec.AnnotationGroups) > 0
 
+	// Check that at least one annotation method is specified
 	if !hasLegacyAnnotations && !hasAnnotationGroups {
 		return fmt.Errorf("rule must specify either annotations or annotationGroups")
 	}
 
+	// Check that only one annotation method is specified
 	if hasLegacyAnnotations && hasAnnotationGroups {
 		return fmt.Errorf("rule cannot specify both annotations and annotationGroups, use one or the other")
 	}
 
 	// Validate legacy annotations if present
 	if hasLegacyAnnotations {
-		// Security validation for annotations
-		if r.SecurityValidator != nil {
-			if err := r.SecurityValidator.ValidateAnnotations(rule.Spec.Annotations); err != nil {
-				// Log security validation failure for audit
-				if r.AuditLogger != nil {
-					r.AuditLogger.LogValidationFailure(context.Background(),
-						r.getRuleID(rule), rule.Name, rule.Namespace,
-						rule.Spec.Annotations, err)
-				}
-				return fmt.Errorf("security validation failed: %w", err)
-			}
-		}
-
-		// Basic annotation validation (format, etc.)
-		if err := r.ResourceManager.ValidateAnnotations(rule.Spec.Annotations); err != nil {
-			return fmt.Errorf("invalid annotations: %w", err)
-		}
+		return r.validateLegacyAnnotations(rule)
 	}
 
 	// Validate annotation groups if present
 	if hasAnnotationGroups {
-		if err := r.ResourceManager.ValidateAnnotationGroups(rule.Spec.AnnotationGroups); err != nil {
-			return fmt.Errorf("invalid annotation groups: %w", err)
-		}
+		return r.validateAnnotationGroups(rule)
+	}
 
-		// Validate template variables if any operations use templates
-		for _, group := range rule.Spec.AnnotationGroups {
-			for _, op := range group.Operations {
-				if op.Template && op.Value != "" {
-					if err := r.ResourceManager.TemplateEngine.ValidateTemplate(op.Value); err != nil {
-						return fmt.Errorf("invalid template in group %s, operation %s: %w", group.Name, op.Key, err)
-					}
+	return nil
+}
+
+// validateLegacyAnnotations validates the legacy annotations
+func (r *AnnotationScheduleRuleReconciler) validateLegacyAnnotations(rule *schedulerv1.AnnotationScheduleRule) error {
+	// Security validation for annotations
+	if r.SecurityValidator != nil {
+		if err := r.SecurityValidator.ValidateAnnotations(rule.Spec.Annotations); err != nil {
+			// Log security validation failure for audit
+			if r.AuditLogger != nil {
+				r.AuditLogger.LogValidationFailure(context.Background(),
+					r.getRuleID(rule), rule.Name, rule.Namespace,
+					rule.Spec.Annotations, err)
+			}
+			return fmt.Errorf("security validation failed: %w", err)
+		}
+	}
+
+	// Basic annotation validation (format, etc.)
+	if err := r.ResourceManager.ValidateAnnotations(rule.Spec.Annotations); err != nil {
+		return fmt.Errorf("invalid annotations: %w", err)
+	}
+
+	return nil
+}
+
+// validateAnnotationGroups validates the annotation groups
+func (r *AnnotationScheduleRuleReconciler) validateAnnotationGroups(rule *schedulerv1.AnnotationScheduleRule) error {
+	if err := r.ResourceManager.ValidateAnnotationGroups(rule.Spec.AnnotationGroups); err != nil {
+		return fmt.Errorf("invalid annotation groups: %w", err)
+	}
+
+	// Validate template variables if any operations use templates
+	for _, group := range rule.Spec.AnnotationGroups {
+		for _, op := range group.Operations {
+			if op.Template && op.Value != "" {
+				if err := r.ResourceManager.TemplateEngine.ValidateTemplate(op.Value); err != nil {
+					return fmt.Errorf("invalid template in group %s, operation %s: %w", group.Name, op.Key, err)
 				}
 			}
 		}
 	}
 
-	// Validate conflict resolution strategy
+	return nil
+}
+
+// validateConflictResolution validates the conflict resolution strategy
+func (r *AnnotationScheduleRuleReconciler) validateConflictResolution(rule *schedulerv1.AnnotationScheduleRule) error {
 	if rule.Spec.ConflictResolution != "" {
 		validStrategies := []string{"priority", "timestamp", "skip"}
 		valid := false
@@ -1038,8 +1158,11 @@ func (r *AnnotationScheduleRuleReconciler) validateRule(rule *schedulerv1.Annota
 				rule.Spec.ConflictResolution, validStrategies)
 		}
 	}
+	return nil
+}
 
-	// Validate template variables format
+// validateTemplateVariables validates the template variables
+func (r *AnnotationScheduleRuleReconciler) validateTemplateVariables(rule *schedulerv1.AnnotationScheduleRule) error {
 	for key, value := range rule.Spec.TemplateVariables {
 		if key == "" {
 			return fmt.Errorf("template variable key cannot be empty")
@@ -1051,38 +1174,57 @@ func (r *AnnotationScheduleRuleReconciler) validateRule(rule *schedulerv1.Annota
 		// Value can be any string, including empty
 		_ = value
 	}
+	return nil
+}
 
-	// Validate schedule configuration
+// validateScheduleConfig validates the schedule configuration
+func (r *AnnotationScheduleRuleReconciler) validateScheduleConfig(rule *schedulerv1.AnnotationScheduleRule) error {
 	schedule := rule.Spec.Schedule
+
 	switch schedule.Type {
 	case "datetime":
-		if schedule.StartTime == nil && schedule.EndTime == nil {
-			return fmt.Errorf("datetime schedule must specify at least startTime or endTime")
-		}
-		if schedule.StartTime != nil && schedule.EndTime != nil {
-			if schedule.EndTime.Time.Before(schedule.StartTime.Time) {
-				return fmt.Errorf("endTime cannot be before startTime")
-			}
-		}
+		return r.validateDatetimeSchedule(schedule)
 	case "cron":
-		if schedule.CronExpression == "" {
-			return fmt.Errorf("cron schedule must specify cronExpression")
-		}
-		if schedule.Action == "" {
-			return fmt.Errorf("cron schedule must specify action (apply or remove)")
-		}
-		if schedule.Action != "apply" && schedule.Action != "remove" {
-			return fmt.Errorf("cron schedule action must be 'apply' or 'remove'")
-		}
+		return r.validateCronSchedule(schedule)
 	default:
 		return fmt.Errorf("schedule type must be 'datetime' or 'cron'")
+	}
+}
+
+// validateDatetimeSchedule validates a datetime schedule
+func (r *AnnotationScheduleRuleReconciler) validateDatetimeSchedule(schedule schedulerv1.ScheduleConfig) error {
+	if schedule.StartTime == nil && schedule.EndTime == nil {
+		return fmt.Errorf("datetime schedule must specify at least startTime or endTime")
+	}
+
+	if schedule.StartTime != nil && schedule.EndTime != nil {
+		if schedule.EndTime.Time.Before(schedule.StartTime.Time) {
+			return fmt.Errorf("endTime cannot be before startTime")
+		}
+	}
+
+	return nil
+}
+
+// validateCronSchedule validates a cron schedule
+func (r *AnnotationScheduleRuleReconciler) validateCronSchedule(schedule schedulerv1.ScheduleConfig) error {
+	if schedule.CronExpression == "" {
+		return fmt.Errorf("cron schedule must specify cronExpression")
+	}
+
+	if schedule.Action == "" {
+		return fmt.Errorf("cron schedule must specify action (apply or remove)")
+	}
+
+	if schedule.Action != "apply" && schedule.Action != "remove" {
+		return fmt.Errorf("cron schedule action must be 'apply' or 'remove'")
 	}
 
 	return nil
 }
 
 // updateRuleStatus updates the rule's status phase and adds a condition
-func (r *AnnotationScheduleRuleReconciler) updateRuleStatus(ctx context.Context, rule *schedulerv1.AnnotationScheduleRule, phase, message string) {
+func (r *AnnotationScheduleRuleReconciler) updateRuleStatus(_ context.Context, rule *schedulerv1.AnnotationScheduleRule, phase, message string) {
 	previousPhase := rule.Status.Phase
 	rule.Status.Phase = phase
 
@@ -1171,11 +1313,11 @@ func (r *AnnotationScheduleRuleReconciler) logRuleStatus(rule *schedulerv1.Annot
 	}
 
 	if rule.Status.LastExecutionTime != nil {
-		statusInfo["lastExecutionTime"] = rule.Status.LastExecutionTime.Time.Format(time.RFC3339)
+		statusInfo["lastExecutionTime"] = rule.Status.LastExecutionTime.Format(time.RFC3339)
 	}
 
 	if rule.Status.NextExecutionTime != nil {
-		statusInfo["nextExecutionTime"] = rule.Status.NextExecutionTime.Time.Format(time.RFC3339)
+		statusInfo["nextExecutionTime"] = rule.Status.NextExecutionTime.Format(time.RFC3339)
 	}
 
 	// Add condition summary
@@ -1214,13 +1356,14 @@ func (r *AnnotationScheduleRuleReconciler) logExecutionMetrics() {
 }
 
 // getDetailedErrorMessage creates a detailed error message with context
-func (r *AnnotationScheduleRuleReconciler) getDetailedErrorMessage(err error, context string, rule *schedulerv1.AnnotationScheduleRule) string {
-	baseMsg := fmt.Sprintf("%s failed for rule %s/%s: %v", context, rule.Namespace, rule.Name, err)
+func (r *AnnotationScheduleRuleReconciler) getDetailedErrorMessage(err error, contextMsg string, rule *schedulerv1.AnnotationScheduleRule) string {
+	baseMsg := fmt.Sprintf("%s failed for rule %s/%s: %v", contextMsg, rule.Namespace, rule.Name, err)
 
 	// Add additional context based on rule configuration
-	if rule.Spec.Schedule.Type == "cron" {
+	switch rule.Spec.Schedule.Type {
+	case "cron":
 		baseMsg += fmt.Sprintf(" (cron: %s, action: %s)", rule.Spec.Schedule.CronExpression, rule.Spec.Schedule.Action)
-	} else if rule.Spec.Schedule.Type == "datetime" {
+	case "datetime":
 		if rule.Spec.Schedule.StartTime != nil {
 			baseMsg += fmt.Sprintf(" (start: %s)", rule.Spec.Schedule.StartTime.Format(time.RFC3339))
 		}
@@ -1300,10 +1443,7 @@ func (r *AnnotationScheduleRuleReconciler) startMetricsLogging() {
 	ticker := time.NewTicker(10 * time.Minute) // Log metrics every 10 minutes
 	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ticker.C:
-			r.logExecutionMetrics()
-		}
+	for range ticker.C {
+		r.logExecutionMetrics()
 	}
 }

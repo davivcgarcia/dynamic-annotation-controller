@@ -70,7 +70,8 @@ func (m *mockTaskExecutor) getExecutedTaskCount() int {
 	return len(m.executedTasks)
 }
 
-func (m *mockTaskExecutor) reset() {
+// Reset clears the executed tasks (currently unused but kept for future use)
+func (m *mockTaskExecutor) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.executedTasks = m.executedTasks[:0]
@@ -319,7 +320,7 @@ func TestTaskExecution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error starting scheduler: %v", err)
 	}
-	defer scheduler.Stop()
+	defer func() { _ = scheduler.Stop() }()
 
 	// Schedule a rule that should execute immediately
 	now := time.Now()
@@ -406,7 +407,7 @@ func TestConcurrentTaskExecution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error starting scheduler: %v", err)
 	}
-	defer scheduler.Stop()
+	defer func() { _ = scheduler.Stop() }()
 
 	// Schedule multiple rules that should execute immediately
 	now := time.Now()

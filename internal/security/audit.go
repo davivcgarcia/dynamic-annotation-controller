@@ -37,9 +37,9 @@ type AuditLogger struct {
 }
 
 // NewAuditLogger creates a new AuditLogger instance
-func NewAuditLogger(client client.Client, log logr.Logger, scheme *runtime.Scheme) *AuditLogger {
+func NewAuditLogger(k8sClient client.Client, log logr.Logger, scheme *runtime.Scheme) *AuditLogger {
 	return &AuditLogger{
-		Client: client,
+		Client: k8sClient,
 		Log:    log.WithName("audit"),
 		Scheme: scheme,
 	}
@@ -148,7 +148,7 @@ func (al *AuditLogger) LogSecurityViolation(ctx context.Context, ruleID, ruleNam
 }
 
 // logEvent logs the audit event to structured logs
-func (al *AuditLogger) logEvent(ctx context.Context, event AuditEvent) {
+func (al *AuditLogger) logEvent(_ context.Context, event AuditEvent) {
 	logLevel := al.Log.V(0) // Info level for successful operations
 	if !event.Success {
 		logLevel = al.Log.V(0) // Keep at info level but with error context

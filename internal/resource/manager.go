@@ -79,9 +79,9 @@ type ResourceManager struct {
 }
 
 // NewResourceManager creates a new ResourceManager instance
-func NewResourceManager(client client.Client, log logr.Logger, scheme *runtime.Scheme) *ResourceManager {
+func NewResourceManager(cl client.Client, log logr.Logger, scheme *runtime.Scheme) *ResourceManager {
 	validator := security.NewAnnotationValidator()
-	auditor := security.NewAuditLogger(client, log, scheme)
+	auditor := security.NewAuditLogger(cl, log, scheme)
 	templateEngine := templating.NewTemplateEngine()
 
 	// Initialize cache with 5 minute TTL and max 1000 entries
@@ -91,7 +91,7 @@ func NewResourceManager(client client.Client, log logr.Logger, scheme *runtime.S
 	rateLimiter := NewAnnotationRateLimiter(DefaultRateLimiterConfig(), log)
 
 	return &ResourceManager{
-		Client:         client,
+		Client:         cl,
 		Log:            log,
 		Validator:      validator,
 		Auditor:        auditor,
@@ -175,6 +175,7 @@ func (rm *ResourceManager) getResourcesByType(ctx context.Context, resourceType 
 }
 
 // getOptimizedFieldSelectors returns field selectors that can optimize queries
+// nolint:unparam // Keeping consistent return type for future field selector implementation
 func (rm *ResourceManager) getOptimizedFieldSelectors(resourceType string) []client.ListOption {
 	var opts []client.ListOption
 
@@ -502,7 +503,7 @@ func (rm *ResourceManager) applyAnnotationsToResource(ctx context.Context, resou
 
 	// Track which annotations we're applying for this rule
 	ruleTrackingKey := fmt.Sprintf("scheduler.k8s.io/rule-%s-annotations", ruleID)
-	var appliedKeys []string
+	appliedKeys := make([]string, 0, len(annotations))
 
 	// Apply new annotations with conflict resolution
 	conflictsResolved := 0
@@ -739,7 +740,7 @@ func (rm *ResourceManager) ApplyAnnotationGroups(ctx context.Context, selector m
 		return nil, nil
 	}
 
-	var results []AnnotationGroupResult
+	results := make([]AnnotationGroupResult, 0, len(groups))
 
 	// Process each annotation group
 	for _, group := range groups {
@@ -861,7 +862,7 @@ func (rm *ResourceManager) applyAnnotationOperationsToResource(ctx context.Conte
 }
 
 // applyAnnotationOperation applies a single annotation operation
-func (rm *ResourceManager) applyAnnotationOperation(ctx context.Context, annotations map[string]string, op schedulerv1.AnnotationOperation, ruleID string, templateContext templating.TemplateContext, conflictResolution AnnotationConflictResolution) AnnotationOperationResult {
+func (rm *ResourceManager) applyAnnotationOperation(_ context.Context, annotations map[string]string, op schedulerv1.AnnotationOperation, ruleID string, templateContext templating.TemplateContext, conflictResolution AnnotationConflictResolution) AnnotationOperationResult {
 	result := AnnotationOperationResult{
 		Key:      op.Key,
 		Priority: op.Priority,
@@ -897,7 +898,7 @@ func (rm *ResourceManager) applyAnnotationOperation(ctx context.Context, annotat
 	// Determine action (default to "apply" if not specified)
 	action := op.Action
 	if action == "" {
-		action = "apply"
+		action = string(OperationTypeApply)
 	}
 
 	switch action {
@@ -948,7 +949,7 @@ func (rm *ResourceManager) applyAnnotationOperation(ctx context.Context, annotat
 }
 
 // shouldOverrideAnnotation determines if an annotation should be overridden based on conflict resolution policy
-func (rm *ResourceManager) shouldOverrideAnnotation(key, currentValue, newValue string, priority int32, resolution AnnotationConflictResolution, ruleID string) bool {
+func (rm *ResourceManager) shouldOverrideAnnotation(_, _ /* currentValue */, _ /* newValue */ string, _ /* priority */ int32, resolution AnnotationConflictResolution, _ /* ruleID */ string) bool {
 	switch resolution {
 	case ConflictResolutionSkip:
 		return false
@@ -1083,7 +1084,7 @@ func (rm *ResourceManager) RemoveAnnotationGroups(ctx context.Context, selector 
 		return nil, nil
 	}
 
-	var results []AnnotationGroupResult
+	results := make([]AnnotationGroupResult, 0, len(groups))
 
 	// Process each annotation group
 	for _, group := range groups {
@@ -1103,7 +1104,7 @@ func (rm *ResourceManager) removeAnnotationGroup(ctx context.Context, resources 
 	}
 
 	// Extract keys to remove from operations
-	var keysToRemove []string
+	keysToRemove := make([]string, 0, len(group.Operations))
 	for _, op := range group.Operations {
 		keysToRemove = append(keysToRemove, op.Key)
 	}

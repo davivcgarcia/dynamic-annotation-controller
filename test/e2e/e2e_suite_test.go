@@ -29,6 +29,10 @@ import (
 	"github.com/davivcgarcia/dynamic-annotation-controller/test/utils"
 )
 
+const (
+	TrueString = "true"
+)
+
 var (
 	// Optional Environment Variables:
 	// - CERT_MANAGER_INSTALL_SKIP=true: Skips CertManager installation during test setup.
@@ -36,9 +40,9 @@ var (
 	// - USE_LOCAL_BINARY=true: Uses locally built binary instead of Docker image.
 	// These variables are useful if CertManager is already installed or image already built,
 	// avoiding re-installation and conflicts.
-	skipCertManagerInstall = os.Getenv("CERT_MANAGER_INSTALL_SKIP") == "true"
-	skipDockerBuild        = os.Getenv("DOCKER_BUILD_SKIP") == "true"
-	useLocalBinary         = os.Getenv("USE_LOCAL_BINARY") == "true"
+	skipCertManagerInstall = os.Getenv("CERT_MANAGER_INSTALL_SKIP") == TrueString
+	skipDockerBuild        = os.Getenv("DOCKER_BUILD_SKIP") == TrueString
+	useLocalBinary         = os.Getenv("USE_LOCAL_BINARY") == TrueString
 	// isCertManagerAlreadyInstalled will be set true when CertManager CRDs be found on the cluster
 	isCertManagerAlreadyInstalled = false
 
@@ -76,11 +80,14 @@ var _ = BeforeSuite(func() {
 					break
 				}
 				if i < maxRetries-1 {
-					_, _ = fmt.Fprintf(GinkgoWriter, "Docker build failed (attempt %d/%d), retrying in 30 seconds...\n", i+1, maxRetries)
+					_, _ = fmt.Fprintf(GinkgoWriter,
+						"Docker build failed (attempt %d/%d), retrying in 30 seconds...\n",
+						i+1, maxRetries)
 					time.Sleep(30 * time.Second)
 				}
 			}
-			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the manager(Operator) image after %d attempts", maxRetries)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred(),
+				"Failed to build the manager(Operator) image after %d attempts", maxRetries)
 		} else {
 			_, _ = fmt.Fprintf(GinkgoWriter, "Skipping Docker build (DOCKER_BUILD_SKIP=true)\n")
 		}

@@ -29,6 +29,11 @@ import (
 	schedulerv1 "github.com/davivcgarcia/dynamic-annotation-controller/api/v1"
 )
 
+const (
+	ScheduleTypeDateTime = "datetime"
+	ScheduleTypeCron     = "cron"
+)
+
 // StateRecoveryManager handles controller restart scenarios and state recovery
 type StateRecoveryManager struct {
 	client       client.Client
@@ -37,9 +42,9 @@ type StateRecoveryManager struct {
 }
 
 // NewStateRecoveryManager creates a new state recovery manager
-func NewStateRecoveryManager(client client.Client, logger logr.Logger, errorHandler *ErrorHandler) *StateRecoveryManager {
+func NewStateRecoveryManager(k8sClient client.Client, logger logr.Logger, errorHandler *ErrorHandler) *StateRecoveryManager {
 	return &StateRecoveryManager{
-		client:       client,
+		client:       k8sClient,
 		logger:       logger,
 		errorHandler: errorHandler,
 	}
@@ -186,7 +191,7 @@ func (srm *StateRecoveryManager) validateRuleForRecovery(rule *schedulerv1.Annot
 		return fmt.Errorf("schedule type is empty")
 	}
 
-	if rule.Spec.Schedule.Type != "datetime" && rule.Spec.Schedule.Type != "cron" {
+	if rule.Spec.Schedule.Type != ScheduleTypeDateTime && rule.Spec.Schedule.Type != ScheduleTypeCron {
 		return fmt.Errorf("invalid schedule type: %s", rule.Spec.Schedule.Type)
 	}
 

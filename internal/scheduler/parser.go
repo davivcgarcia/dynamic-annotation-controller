@@ -25,6 +25,12 @@ import (
 	schedulerv1 "github.com/davivcgarcia/dynamic-annotation-controller/api/v1"
 )
 
+const (
+	ScheduleTypeDateTime = "datetime"
+	ScheduleTypeCron     = "cron"
+	PhaseActive          = "active"
+)
+
 // ScheduleParser handles parsing and validation of schedule configurations
 type ScheduleParser struct {
 	cronParser cron.Parser
@@ -40,9 +46,9 @@ func NewScheduleParser() *ScheduleParser {
 // ValidateSchedule validates a schedule configuration and returns any validation errors
 func (p *ScheduleParser) ValidateSchedule(schedule schedulerv1.ScheduleConfig) error {
 	switch schedule.Type {
-	case "datetime":
+	case ScheduleTypeDateTime:
 		return p.validateDateTimeSchedule(schedule)
-	case "cron":
+	case ScheduleTypeCron:
 		return p.validateCronSchedule(schedule)
 	default:
 		return fmt.Errorf("invalid schedule type: %s, must be 'datetime' or 'cron'", schedule.Type)
@@ -52,9 +58,9 @@ func (p *ScheduleParser) ValidateSchedule(schedule schedulerv1.ScheduleConfig) e
 // ValidateScheduleForCreation validates a schedule configuration for new rule creation
 func (p *ScheduleParser) ValidateScheduleForCreation(schedule schedulerv1.ScheduleConfig) error {
 	switch schedule.Type {
-	case "datetime":
+	case ScheduleTypeDateTime:
 		return p.validateDateTimeScheduleForCreation(schedule)
-	case "cron":
+	case ScheduleTypeCron:
 		return p.validateCronSchedule(schedule)
 	default:
 		return fmt.Errorf("invalid schedule type: %s, must be 'datetime' or 'cron'", schedule.Type)
@@ -143,9 +149,9 @@ func (p *ScheduleParser) CalculateNextExecution(schedule schedulerv1.ScheduleCon
 	}
 
 	switch schedule.Type {
-	case "datetime":
+	case ScheduleTypeDateTime:
 		return p.calculateDateTimeNextExecution(schedule, lastExecution)
-	case "cron":
+	case ScheduleTypeCron:
 		return p.calculateCronNextExecution(schedule, lastExecution)
 	default:
 		return nil, fmt.Errorf("unsupported schedule type: %s", schedule.Type)
@@ -203,9 +209,9 @@ func (p *ScheduleParser) GetSchedulePhase(schedule schedulerv1.ScheduleConfig, l
 	now := time.Now()
 
 	switch schedule.Type {
-	case "datetime":
+	case ScheduleTypeDateTime:
 		return p.getDateTimePhase(schedule, lastExecution, now), nil
-	case "cron":
+	case ScheduleTypeCron:
 		return p.getCronPhase(schedule, lastExecution, now), nil
 	default:
 		return "failed", fmt.Errorf("unsupported schedule type: %s", schedule.Type)
@@ -213,7 +219,7 @@ func (p *ScheduleParser) GetSchedulePhase(schedule schedulerv1.ScheduleConfig, l
 }
 
 // getDateTimePhase determines phase for datetime schedules
-func (p *ScheduleParser) getDateTimePhase(schedule schedulerv1.ScheduleConfig, lastExecution *time.Time, now time.Time) string {
+func (p *ScheduleParser) getDateTimePhase(schedule schedulerv1.ScheduleConfig, _ *time.Time, now time.Time) string {
 	startTime := schedule.StartTime.Time
 
 	// If start time is in the future
@@ -232,7 +238,7 @@ func (p *ScheduleParser) getDateTimePhase(schedule schedulerv1.ScheduleConfig, l
 
 		// If we're between start and end time
 		if startTime.Before(now) && endTime.After(now) {
-			return "active"
+			return PhaseActive
 		}
 	} else {
 		// No end time, so if start time has passed, we're completed
@@ -241,13 +247,13 @@ func (p *ScheduleParser) getDateTimePhase(schedule schedulerv1.ScheduleConfig, l
 		}
 	}
 
-	return "active"
+	return PhaseActive
 }
 
 // getCronPhase determines phase for cron schedules
 func (p *ScheduleParser) getCronPhase(schedule schedulerv1.ScheduleConfig, lastExecution *time.Time, now time.Time) string {
 	// Cron schedules are always active (recurring)
-	return "active"
+	return PhaseActive
 }
 
 // IsTimeToExecute checks if it's time to execute a schedule
@@ -269,9 +275,9 @@ func (p *ScheduleParser) IsTimeToExecute(schedule schedulerv1.ScheduleConfig, la
 // GetExecutionAction determines what action should be taken for the current execution
 func (p *ScheduleParser) GetExecutionAction(schedule schedulerv1.ScheduleConfig, lastExecution *time.Time) (string, error) {
 	switch schedule.Type {
-	case "datetime":
+	case ScheduleTypeDateTime:
 		return p.getDateTimeAction(schedule, lastExecution)
-	case "cron":
+	case ScheduleTypeCron:
 		return schedule.Action, nil
 	default:
 		return "", fmt.Errorf("unsupported schedule type: %s", schedule.Type)

@@ -30,6 +30,13 @@ import (
 	schedulerv1 "github.com/davivcgarcia/dynamic-annotation-controller/api/v1"
 )
 
+const (
+	ResourceTypePods         = "pods"
+	ResourceTypeDeployments  = "deployments"
+	ResourceTypeStatefulSets = "statefulsets"
+	ResourceTypeDaemonSets   = "daemonsets"
+)
+
 // OrphanedAnnotationCleanup handles cleanup of annotations left by deleted rules
 type OrphanedAnnotationCleanup struct {
 	client.Client
@@ -42,9 +49,9 @@ type OrphanedAnnotationCleanup struct {
 }
 
 // NewOrphanedAnnotationCleanup creates a new cleanup manager
-func NewOrphanedAnnotationCleanup(client client.Client, log logr.Logger) *OrphanedAnnotationCleanup {
+func NewOrphanedAnnotationCleanup(cl client.Client, log logr.Logger) *OrphanedAnnotationCleanup {
 	return &OrphanedAnnotationCleanup{
-		Client:          client,
+		Client:          cl,
 		log:             log,
 		cleanupInterval: 30 * time.Minute, // Run cleanup every 30 minutes
 		maxAge:          24 * time.Hour,   // Clean up annotations older than 24 hours
@@ -166,13 +173,13 @@ func (oac *OrphanedAnnotationCleanup) getResourcesWithSchedulerAnnotations(ctx c
 	listOpts := []client.ListOption{}
 
 	switch resourceType {
-	case "pods":
+	case ResourceTypePods:
 		return oac.getPodsWithSchedulerAnnotations(ctx, listOpts)
-	case "deployments":
+	case ResourceTypeDeployments:
 		return oac.getDeploymentsWithSchedulerAnnotations(ctx, listOpts)
-	case "statefulsets":
+	case ResourceTypeStatefulSets:
 		return oac.getStatefulSetsWithSchedulerAnnotations(ctx, listOpts)
-	case "daemonsets":
+	case ResourceTypeDaemonSets:
 		return oac.getDaemonSetsWithSchedulerAnnotations(ctx, listOpts)
 	default:
 		return nil, fmt.Errorf("unsupported resource type: %s", resourceType)
@@ -268,6 +275,7 @@ func (oac *OrphanedAnnotationCleanup) hasSchedulerAnnotations(resource client.Ob
 }
 
 // cleanupResourceBatch cleans up orphaned annotations from a batch of resources
+// nolint:unparam // Keeping error return for future error handling
 func (oac *OrphanedAnnotationCleanup) cleanupResourceBatch(ctx context.Context, resources []client.Object, validRuleIDs map[string]bool) (int, error) {
 	cleanedCount := 0
 

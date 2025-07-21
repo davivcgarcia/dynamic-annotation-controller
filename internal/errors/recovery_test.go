@@ -32,6 +32,10 @@ import (
 	schedulerv1 "github.com/davivcgarcia/dynamic-annotation-controller/api/v1"
 )
 
+const (
+	ConditionTypeMissedExecution = "MissedExecution"
+)
+
 func init() {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 }
@@ -307,7 +311,7 @@ func TestStateRecoveryManager_CheckForMissedExecutions(t *testing.T) {
 		}
 
 		for _, condition := range updatedRule.Status.Conditions {
-			if condition.Type == "MissedExecution" {
+			if condition.Type == ConditionTypeMissedExecution {
 				t.Error("Unexpected missed execution condition found")
 			}
 		}
@@ -357,7 +361,7 @@ func TestStateRecoveryManager_CheckForMissedExecutions(t *testing.T) {
 		}
 
 		for _, condition := range updatedRule.Status.Conditions {
-			if condition.Type == "MissedExecution" {
+			if condition.Type == ConditionTypeMissedExecution {
 				t.Error("Unexpected missed execution condition found for cron rule")
 			}
 		}

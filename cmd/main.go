@@ -338,7 +338,8 @@ func main() {
 
 	// Create task executor for the scheduler
 	setupLog.Info("Initializing scheduler components...")
-	taskExecutor := controller.NewTaskExecutor(mgr.GetClient(), resourceManager, setupLog, nil) // Will set reconciler later
+	// Will set reconciler later
+	taskExecutor := controller.NewTaskExecutor(mgr.GetClient(), resourceManager, setupLog, nil)
 	timeScheduler := scheduler.NewTimeScheduler(taskExecutor, setupLog)
 
 	// Create the main reconciler with all components

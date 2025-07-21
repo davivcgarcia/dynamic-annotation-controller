@@ -19,6 +19,7 @@ package resource
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -217,7 +218,7 @@ func (rc *ResourceCache) evictOldestEntry() {
 // keyContainsResourceType checks if a cache key contains a specific resource type
 func (rc *ResourceCache) keyContainsResourceType(key, resourceType string) bool {
 	// This is a simple implementation - in practice you might want more sophisticated matching
-	return fmt.Sprintf("%s", key) != "" // Placeholder - implement based on key format
+	return strings.Contains(key, resourceType) // Check if the key contains the resource type
 }
 
 // StartCleanupRoutine starts a background routine to clean up expired entries

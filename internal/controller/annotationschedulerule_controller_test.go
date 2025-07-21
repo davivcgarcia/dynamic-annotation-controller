@@ -177,10 +177,10 @@ var _ = Describe("AnnotationScheduleRule Controller", func() {
 		AfterEach(func() {
 			// Clean up test resources
 			if testPod != nil {
-				k8sClient.Delete(ctx, testPod)
+				_ = k8sClient.Delete(ctx, testPod)
 			}
 			if testDeployment != nil {
-				k8sClient.Delete(ctx, testDeployment)
+				_ = k8sClient.Delete(ctx, testDeployment)
 			}
 		})
 
@@ -227,6 +227,7 @@ var _ = Describe("AnnotationScheduleRule Controller", func() {
 					NamespacedName: namespacedName,
 				})
 				Expect(err).NotTo(HaveOccurred())
+				// nolint:staticcheck // Using Requeue for backward compatibility
 				Expect(result.Requeue).To(BeTrue()) // Should requeue to add finalizer
 
 				// Reconcile again after finalizer is added
